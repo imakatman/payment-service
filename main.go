@@ -20,11 +20,11 @@ func handleError(w http.ResponseWriter, msg string) {
 	log.Println(msg)
 
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusBadRequest)
 	response := error{
 		Message: msg,
 	}
 	json.NewEncoder(w).Encode(response)
-	w.WriteHeader(http.StatusBadRequest)
 }
 
 type paymentPayload struct {
@@ -45,15 +45,13 @@ type paymentCollection struct {
 var accountToCustomerLookup map[string]string = make(map[string]string)
 
 func postPayment(w http.ResponseWriter, req *http.Request) {
+	var newPayment paymentPayload
+	
 	req.Body = http.MaxBytesReader(w, req.Body, 1048576)
 	decoder := json.NewDecoder(req.Body)
-	decoder.DisallowUnknownFields()
-
-	var newPayment paymentPayload
-
 	decoderErr := decoder.Decode(&newPayment)
-
-	if decoderErr != decoderErr {
+	decoder.DisallowUnknownFields()
+	if decoderErr != nil {
 		handleError(w, "There was a problem decoding the payload")
 		return
 	}

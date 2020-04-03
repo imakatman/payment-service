@@ -18,14 +18,14 @@ type error struct {
 }
 
 func handleError(w http.ResponseWriter, msg string) {
+	log.Println(msg)
+
 	w.Header().Set("Content-Type", "application/json")
 	response := error{
 		Message: msg,
 	}
 	json.NewEncoder(w).Encode(response)
 	w.WriteHeader(http.StatusBadRequest)
-
-	log.Println(msg)
 }
 
 type payment struct {
@@ -121,19 +121,19 @@ func getPaymentCollection(w http.ResponseWriter, req *http.Request) {
 }
 
 // handleRoot can only handle /:account_id/payments right now
-func handleRoot(w http.ResponseWriter, req *http.Request) {	
+func handleRoot(w http.ResponseWriter, req *http.Request) {
 	// Check the request path to make sure it is not too deep
 	forwardSlashRune := '/'
 	pathInBytes := []rune(req.URL.Path)
 	forwardSlashByteAcc := 0
 
-	 for _, b := range pathInBytes {
-		 if b == forwardSlashRune {
+	for _, b := range pathInBytes {
+		if b == forwardSlashRune {
 			forwardSlashByteAcc++
-		 }
-	 }
+		}
+	}
 
-	 pathIsNotTooDeep := forwardSlashByteAcc < 3
+	pathIsNotTooDeep := forwardSlashByteAcc < 3
 
 	if strings.HasSuffix(req.URL.Path, "/payments") && pathIsNotTooDeep {
 		getPaymentCollection(w, req)

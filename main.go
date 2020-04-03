@@ -20,7 +20,7 @@ type error struct {
 func handleError(w http.ResponseWriter, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	response := error{
-		Message: "The requested URL does not exist.",
+		Message: msg,
 	}
 	json.NewEncoder(w).Encode(response)
 	w.WriteHeader(http.StatusBadRequest)
@@ -40,11 +40,12 @@ var accountToCustomerLookup map[string]string = make(map[string]string)
 
 func postPayment(w http.ResponseWriter, req *http.Request) {
 	accountID := req.FormValue("account_id")
-	// @TODO: Amount should be able to come in as floating numbers
 	amount, err := strconv.ParseInt(req.FormValue("amount"), 10, 64)
+
 	if err != nil {
-		log.Fatal(err)
-		panic(fmt.Sprintf("Amount, %v, is invalid", req.FormValue("amount")))
+		errorMessage := fmt.Sprintf("Amount, %v, is invalid. Please provide the amount in cents.", req.FormValue("amount"))
+		handleError(w, errorMessage)
+		return
 	}
 
 	stripe.Key = "sk_test_4eC39HqLyjWDarjtT1zdp7dc"
@@ -88,19 +89,19 @@ func postPayment(w http.ResponseWriter, req *http.Request) {
 }
 
 func getPaymentCollection(w http.ResponseWriter, req *http.Request) {
-	accountID := strings.TrimPrefix(req.URL.Path, "/payments/")
+	accountID := strings.TrimPrefix(strings.TrimSuffix(req.URL.Path, "/payments"), "/")
 	customerID, customerExists := accountToCustomerLookup[accountID]
 
 	if !customerExists {
-		handleError(w, "This account does not exist.")
+		handleError(w, "This account either doesn't exist or doesn't have any posted payments.")
 		return
 	}
 
 	var payments []payment
-	params := &stripe.ChargeListParams{
+	chargeListParams := &stripe.ChargeListParams{
 		Customer: &customerID,
 	}
-	chargesList := charge.List(params)
+	chargesList := charge.List(chargeListParams)
 
 	for chargesList.Next() {
 		payments = append(payments, payment{
@@ -117,9 +118,22 @@ func getPaymentCollection(w http.ResponseWriter, req *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-func handleRoot(w http.ResponseWriter, req *http.Request) {
-	// @TODO: Make sure there are no more paths
-	if strings.HasPrefix(req.URL.Path, "/payments") {
+// handleRoot can only handle /:account_id/payments right now
+func handleRoot(w http.ResponseWriter, req *http.Request) {	
+	// Check the request path to make sure it is not too deep
+	forwardSlashRune := '/'
+	pathInBytes := []rune(req.URL.Path)
+	forwardSlashByteAcc := 0
+
+	 for _, b := range pathInBytes {
+		 if b == forwardSlashRune {
+			forwardSlashByteAcc++
+		 }
+	 }
+
+	 pathIsNotTooDeep := forwardSlashByteAcc < 3
+
+	if strings.HasSuffix(req.URL.Path, "/payments") && pathIsNotTooDeep {
 		getPaymentCollection(w, req)
 		return
 	}
@@ -128,8 +142,8 @@ func handleRoot(w http.ResponseWriter, req *http.Request) {
 }
 
 func main() {
-	http.HandleFunc("/", handleRoot)
 	http.HandleFunc("/postPayment", postPayment)
+	http.HandleFunc("/", handleRoot)
 
 	fmt.Println("Listening on port 8080...")
 	if err := http.ListenAndServe(":8080", nil); err != nil {

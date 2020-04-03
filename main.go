@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/stripe/stripe-go"
@@ -28,6 +27,11 @@ func handleError(w http.ResponseWriter, msg string) {
 	w.WriteHeader(http.StatusBadRequest)
 }
 
+type paymentPayload struct {
+	Amount    int64  `json:"amount"`
+	AccountID string `json:"account_id"`
+}
+
 type payment struct {
 	ID     string `json:"id"`
 	Amount int64  `json:"amount"`
@@ -41,12 +45,24 @@ type paymentCollection struct {
 var accountToCustomerLookup map[string]string = make(map[string]string)
 
 func postPayment(w http.ResponseWriter, req *http.Request) {
-	accountID := req.FormValue("account_id")
-	amount, err := strconv.ParseInt(req.FormValue("amount"), 10, 64)
+	req.Body = http.MaxBytesReader(w, req.Body, 1048576)
+	decoder := json.NewDecoder(req.Body)
+	decoder.DisallowUnknownFields()
 
-	if err != nil {
-		errorMessage := fmt.Sprintf("Amount, %v, is invalid. Please provide the amount in cents.", req.FormValue("amount"))
-		handleError(w, errorMessage)
+	var newPayment paymentPayload
+
+	decoderErr := decoder.Decode(&newPayment)
+
+	if decoderErr != decoderErr {
+		handleError(w, "There was a problem decoding the payload")
+		return
+	}
+
+	accountID := newPayment.AccountID
+	amount := newPayment.Amount
+
+	if amount == 0 {
+		handleError(w, "There was a problem with the payment amount. Please make sure that the amount is at least $0.50 and or that the payload is correct. The expected type is a string in cents.")
 		return
 	}
 

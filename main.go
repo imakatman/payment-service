@@ -24,6 +24,8 @@ func handleError(w http.ResponseWriter, msg string) {
 	}
 	json.NewEncoder(w).Encode(response)
 	w.WriteHeader(http.StatusBadRequest)
+
+	log.Println(msg)
 }
 
 type payment struct {
@@ -145,7 +147,7 @@ func main() {
 	http.HandleFunc("/postPayment", postPayment)
 	http.HandleFunc("/", handleRoot)
 
-	fmt.Println("Listening on port 8080...")
+	log.Println("Listening on port 8080...")
 	if err := http.ListenAndServe(":8080", nil); err != nil {
 		log.Fatal(err)
 	}
